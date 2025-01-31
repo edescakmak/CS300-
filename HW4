@@ -1,0 +1,144 @@
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <fstream>
+#include <string>
+using namespace std;
+
+class Graph {
+private:
+    int V;
+    vector<vector<int>> adjacency;
+
+    // path search func
+    bool bpm(int u, vector<bool>& seen, vector<int>& matching, const vector<int>& color) {
+        for (int v : adjacency[u]) {
+            // Only match v
+
+            if (color[v] == 1 && !seen[v]) {
+                seen[v] = true;
+                // If 'v' is not matched or the previously matched vertex can be rematched
+                if (matching[v] == -1 || bpm(matching[v], seen, matching, color)) {
+                    matching[v] = u;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+public:
+    Graph(int vertices) : V(vertices) {
+        adjacency.resize(vertices);
+    }
+
+    void addEdge(int u, int v) {
+        // u and v are valid
+        if (u < 0 || u >= V || v < 0 || v >= V) {
+            return;
+        }
+        // Undirected graph
+        adjacency[u].push_back(v);
+        adjacency[v].push_back(u);
+    }
+
+    // to return isbipartite
+    pair<bool, vector<int>> isBipartite() {
+        vector<int> color(V, -1);
+
+        for (int start = 0; start < V; start++) {
+            if (color[start] == -1) {
+                queue<int> q;
+                q.push(start);
+                color[start] = 0;
+
+                while (!q.empty()) {
+                    int vertex = q.front();
+                    q.pop();
+
+                    for (int neighbor : adjacency[vertex]) {
+                        if (color[neighbor] == -1) {
+                            color[neighbor] = 1 - color[vertex];
+                            q.push(neighbor);
+                        }
+                        else if (color[neighbor] == color[vertex]) {
+                            // Not bipartite if same color on both ends of an edge
+                            return make_pair(false, vector<int>());
+                        }
+                    }
+                }
+            }
+        }
+        return make_pair(true, color);
+    }
+
+    // Calculate maximum bipartite match
+    int maxBipartiteMatching(const vector<int>& color) {
+        vector<int> matching(V, -1);
+        int count = 0;
+
+        // Find matches for left partitition vertices
+        for (int u = 0; u < V; u++) {
+            if (color[u] == 0) {
+                vector<bool> seen(V, false);
+                if (bpm(u, seen, matching, color)) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+};
+
+void slvGraph(const string& filename) {
+    ifstream file(filename);
+    if (!file) {
+        cout << "Error: File " << filename << " not found." << endl;
+        return;
+    }
+
+    int V, E;
+    file >> V >> E;
+
+    Graph g(V);
+
+    for (int i = 0; i < E; i++) {
+        int u, v;
+        if (!(file >> u >> v)) {
+            cerr << "Error: Could not read edge info from " << filename << endl;
+            return;
+        }
+
+        // shift to 0 based
+        --u;
+        --v;
+        g.addEdge(u, v);
+    }
+
+    // use direct pairs
+    pair<bool, vector<int>> result = g.isBipartite();
+    bool isBip = result.first;
+    vector<int> color = result.second;
+
+    if (!isBip) {
+        cout << "The graph is not bipartite." << endl;
+        return;
+    }
+    cout << "The graph is bipartite." << endl;
+
+    int mxMatch = g.maxBipartiteMatching(color);
+    cout << "Maximum matching size: " << mxMatch << endl;
+}
+
+int main() {
+    while (true) {
+        cout << "Enter the graph name (e.g., 'graph1' or 'exit' to terminate): ";
+        string graphName;
+        cin >> graphName;
+        if (graphName == "exit") {
+            break;
+        }
+        slvGraph(graphName + ".txt");
+    }
+    return 0;
+}
