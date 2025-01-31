@@ -1,0 +1,218 @@
+//30779 Edes Rıza Cakmak HW3
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <cctype>
+#include <sstream>
+#include <cstdlib>
+
+using namespace std;
+
+// Define hash table size
+static const int HASH_TABLE_SIZE = 200003;
+
+// Structure for elements in the hash table
+struct HashTableElement {
+    string elementValue; // Stores the RLE string
+    bool isUsed;         // Indicates if the element is in use
+    HashTableElement() : isUsed(false) {}
+};
+
+class HashTable {
+public:
+    HashTable() {
+        hashTableArray.resize(HASH_TABLE_SIZE);
+    }
+
+    // Insert an element into the hash table
+    void insertItem(const string &inputStringValue) {
+        long hashIndex = computeHash(inputStringValue); // Calculate hash index
+        long startingHashIndex = hashIndex;            // Keep track of the starting index
+        // Handle collisions using linear probing
+        while (hashTableArray[hashIndex].isUsed && hashTableArray[hashIndex].elementValue != inputStringValue) {
+            hashIndex = (hashIndex + 1) % HASH_TABLE_SIZE;
+            if (hashIndex == startingHashIndex) return; // Stop if the table is full
+        }
+        if (!hashTableArray[hashIndex].isUsed) {
+            hashTableArray[hashIndex].elementValue = inputStringValue;
+            hashTableArray[hashIndex].isUsed = true;
+        }
+    }
+
+    // Check if an element exists in the hash table
+    bool containsItem(const string &inputStringValue) const {
+        long hashIndex = computeHash(inputStringValue); // Calculate hash index
+        long startingHashIndex = hashIndex;            // Keep track of the starting index
+        while (hashTableArray[hashIndex].isUsed) {
+            if (hashTableArray[hashIndex].elementValue == inputStringValue) return true; // Found
+            hashIndex = (hashIndex + 1) % HASH_TABLE_SIZE;
+            if (hashIndex == startingHashIndex) break; // Stop if looped back to the start
+        }
+        return false; // Not found
+    }
+
+private:
+    vector<HashTableElement> hashTableArray; // Hash table as a vector of elements
+
+    // Compute the hash value for a string
+    long computeHash(const string &inputString) const {
+        unsigned long hashValue = 0;
+        // Custom hash function
+        for (int i = 0; i < (int)inputString.size(); i++) {
+            char characterInString = inputString[i];
+            hashValue ^= ((hashValue << 7) + (characterInString) + (hashValue >> 3));
+        }
+        return (long)(hashValue % HASH_TABLE_SIZE);
+    }
+};
+
+// Process a single row of the image
+string processImageLine(const string &imageRow) {
+    return imageRow.substr(0, 28); // Take only the first 28 characters
+}
+
+// Read image data from a file and flatten it into a single string
+string readImageData(const string &fileNameToRead) {
+    ifstream inputFileStream(fileNameToRead.c_str());
+    string imagePixelDataFlattened;
+    for (int rowNumber = 0; rowNumber < 28; rowNumber++) {
+        string imageRow;
+        getline(inputFileStream, imageRow);
+        imagePixelDataFlattened += processImageLine(imageRow); // Append processed row
+    }
+    return imagePixelDataFlattened;
+}
+
+// Append RLE encoding to the result
+void appendRLE(string &res, int count, char c) {
+    res += to_string(count);           // Add count
+    res += (c == '1' ? 'W' : 'B');     // Add color (W for white, B for black)
+}
+
+// Handle boundary between runs during RLE encoding
+void handleRunBoundary(string &rleRes, int &count, char &cur, char newChar) {
+    appendRLE(rleRes, count, cur); // Append the current run
+    cur = newChar;                 // Update current character
+    count = 1;                     // Reset count
+}
+
+// Encode a string using RLE
+string encodeRLE(const string &s) {
+    if (s.empty()) return ""; // Handle empty string
+    string rleRes;
+    char cur = s[0];
+    int count = 1;
+    for (int i = 1; i < (int)s.size(); i++) {
+        if (s[i] == cur) {
+            count++; // Increment count for the same character
+        } else {
+            handleRunBoundary(rleRes, count, cur, s[i]); // Handle boundary
+        }
+    }
+    appendRLE(rleRes, count, cur); // Append the last run
+    return rleRes;
+}
+
+// Parse the count from the RLE string
+int parseRLECount(const string &rleStr, int &pos) {
+    int count = 0;
+    while (pos < (int)rleStr.size() && isdigit(rleStr[pos])) {
+        count = count * 10 + (rleStr[pos] - '0'); // Extract digit
+        pos++;
+    }
+    return count;
+}
+
+// Get pixel character from RLE encoding
+char getPixelChar(char ch) {
+    return (ch == 'W') ? '1' : '0'; // Convert W/B to 1/0
+}
+
+// Decode an RLE string back to its original form
+string decodeRLE(const string &rleStr) {
+    string decodedStr;
+    int i = 0;
+    while (i < (int)rleStr.size()) {
+        int count = parseRLECount(rleStr, i); // Get count
+        if (i >= (int)rleStr.size()) break;
+        char ch = rleStr[i++];               // Get character
+        char pix = getPixelChar(ch);         // Convert to pixel
+        decodedStr.append(count, pix);      // Append repeated characters
+    }
+    return decodedStr;
+}
+
+// Print a single row of the image
+void printImageRow(const string &flat, int rowNumber) {
+    cout << flat.substr(rowNumber * 28, 28) << "\n"; // Print 28 pixels per row
+}
+
+// Print the entire image grid
+void printGrid(const string &flattenedImageString) {
+    for (int rowNumber = 0; rowNumber < 28; rowNumber++) {
+        printImageRow(flattenedImageString, rowNumber); // Print each row
+    }
+}
+
+// Insert images into the hash table
+void insertImagesIntoHashTable(HashTable &imageHashTable) {
+    while (true) {
+        cout << "Enter image number to insert into the hash table (or 'query' to continue): \n";
+        string userInput;
+        cin >> userInput;
+        if (userInput == "query") break; // Stop if user inputs "query"
+        int imageNumber = atoi(userInput.c_str()); // Convert input to integer
+        string imageFileName = "image" + to_string(imageNumber) + ".txt"; // Construct file name
+        string flattenedImageData = readImageData(imageFileName); // Read image data
+        string rleData = encodeRLE(flattenedImageData); // Encode image with RLE
+        imageHashTable.insertItem(rleData); // Insert into hash table
+        cout << "Image " << imageNumber << " inserted into the hash table.\n";
+    }
+}
+
+// Query images from the hash table
+void queryImagesFromHashTable(HashTable &imageHashTable) {
+    while (true) {
+        cout << "Enter image number to query (or 'exit' to quit): \n";
+        string userInput;
+        cin >> userInput;
+        if (userInput == "exit") {
+            cout << "Exiting the program!\n";
+            break; // Exit the loop
+        }
+        int queryImageNumber = atoi(userInput.c_str()); // Convert input to integer
+        string queryFileName = "query" + to_string(queryImageNumber) + ".txt"; // Construct file name
+        string flattenedQueryData = readImageData(queryFileName); // Read query image data
+        string rleQueryData = encodeRLE(flattenedQueryData); // Encode query image with RLE
+        if (imageHashTable.containsItem(rleQueryData)) { // Check if hash table contains the RLE
+            cout << "RLE String for query" << queryImageNumber << ".txt found in hash table.\n";
+            string decodedData = decodeRLE(rleQueryData); // Decode RLE for display
+            printGrid(decodedData); // Print the matching image
+        } else {
+            cout << "No match for the image with encoding: " << rleQueryData << "\n";
+        }
+    }
+}
+
+// Start the image insertion process
+void startInsertProcess(HashTable &imageHashTable) {
+    insertImagesIntoHashTable(imageHashTable);
+}
+
+// Start the image query process
+void beginQueryProcess(HashTable &imageHashTable) {
+    queryImagesFromHashTable(imageHashTable);
+}
+
+// Main program logic
+void runProgram() {
+    HashTable imageHashTable; // Create a hash table
+    startInsertProcess(imageHashTable); // Insert images
+    beginQueryProcess(imageHashTable); // Query images
+}
+
+int main() {
+    runProgram(); // Run the program
+    return 0;
+}
